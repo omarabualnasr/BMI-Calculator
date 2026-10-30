@@ -64,29 +64,41 @@ const ACTIVITY_LABELS = {
   extraActive: "Extra active",
 };
 
+const LUCIDE_ICON_NAMES = {
+  activity: "activity",
+  ruler: "ruler",
+  ruler2: "ruler",
+  sparkles: "sparkles",
+  file: "file-text",
+  refresh: "refresh-cw",
+  arrow: "arrow-right",
+  back: "arrow-left",
+  check: "check",
+  scale: "scale",
+  heart: "heart",
+  clock: "clock",
+  download: "download",
+  info: "info",
+  chart: "chart-line",
+  heartPulse: "heart-pulse",
+  fileDown: "file-down",
+  shield: "shield-check",
+};
+
 function icon(name, size = 18) {
-  const paths = {
-    activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
-    ruler: '<path d="m3 17 14-14 4 4L7 21H3z"/><path d="m14 6 4 4M11 9l2 2M8 12l2 2M5 15l2 2"/>',
-    sparkles: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 14 .8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z"/>',
-    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
-    refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>',
-    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
-    back: '<path d="M19 12H5m6 6-6-6 6-6"/>',
-    check: '<path d="m5 12 4 4L19 6"/>',
-    scale: '<path d="M12 3v18M5 7h14M7 7l-4 6h8L7 7Zm10 0-4 6h8l-4-6ZM5 21h14"/>',
-    heart: '<path d="M20.8 8.8c0 5.5-8.8 11-8.8 11s-8.8-5.5-8.8-11A4.8 4.8 0 0 1 12 6.5a4.8 4.8 0 0 1 8.8 2.3Z"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    ruler2: '<path d="M4 4h16v16H4z"/><path d="M8 4v4m4-4v2m4-2v4m-8 10v-4m4 4v-2m4 2v-4"/>',
-    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
-    chart: '<path d="M3 3v18h18M7 14l4-4 4 3 5-7"/>',
-    heartPulse: '<path d="M20.8 8.8c0 5.5-8.8 11-8.8 11s-8.8-5.5-8.8-11A4.8 4.8 0 0 1 12 6.5a4.8 4.8 0 0 1 8.8 2.3Z"/><path d="M7 12h3l1.5-3 2.2 6 1.3-3H18"/>',
-    fileDown: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6m-3-3 3 3 3-3"/>',
-    shield: '<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/>',
-  };
-  const body = paths[name] || paths.info;
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  const iconName = LUCIDE_ICON_NAMES[name] || name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+  return `<i data-lucide="${esc(iconName)}" class="app-icon" style="width:${size}px;height:${size}px" aria-hidden="true"></i>`;
+}
+
+function renderIcons() {
+  if (!window.lucide || typeof window.lucide.createIcons !== "function") {
+    console.warn("Lucide did not load. Check the icon-library CDN connection.");
+    return;
+  }
+  window.lucide.createIcons({
+    root,
+    attrs: { "stroke-width": 1.8 },
+  });
 }
 
 function esc(value) {
@@ -182,6 +194,7 @@ function renderWorkspaceNav() {
 }
 function renderAppShell() {
   root.innerHTML = `<main class="workspace-shell"><header class="workspace-topbar"><div class="workspace-heading"><h1>Workspace</h1><p>Your measurements, calculations, insights, and report in one place.</p></div><button class="btn" type="button" data-action="reset-onboarding">${icon("refresh", 15)} Reset</button></header>${renderWorkspaceNav()}<div class="page-content workspace-content">${renderWorkspace()}</div></main>${state.toast ? `<div class="toast ${state.toast.type === "error" ? "error" : ""}" role="status">${esc(state.toast.message)}</div>` : ""}`;
+  renderIcons();
   drawCharts();
 }
 
@@ -398,6 +411,7 @@ function renderWizard() {
     control = `<div class="wizard-input-wrap"><input class="input wizard-input" id="wizard-input" name="wizardValue" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step.step}" data-min="${min}" data-max="${max}" data-step="${step.step}" placeholder="Enter value" value="${esc(state.wizardValue)}" autocomplete="off"/><div class="number-stepper-group" role="group" aria-label="Adjust ${esc(step.title.toLowerCase())}"><button class="number-stepper-btn" type="button" data-stepper="-1" aria-label="Decrease value">−</button><button class="number-stepper-btn" type="button" data-stepper="1" aria-label="Increase value">+</button></div><span class="wizard-suffix">${suffix}</span></div>`;
   }
   root.innerHTML = `<main class="wizard-shell wizard-shell-simple"><div class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>YOUR HEALTH PROFILE</span><span>Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions"><button class="btn btn-ghost" type="button" data-action="wizard-back" ${state.wizardIndex === 0 ? "disabled" : ""}>${icon("back", 14)} Back</button><div class="wizard-actions-right">${step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div><p class="card-description" style="margin-top:28px">Skip optional questions and continue with the information you have.</p></div></div></main>`;
+  renderIcons();
   const input = root.querySelector("#wizard-input");
   if (input) input.focus({ preventScroll: true });
 }

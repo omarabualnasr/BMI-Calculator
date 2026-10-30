@@ -9,16 +9,12 @@ import {
   calculateWaistHipRatio,
   classifyAdultBMI,
   classifyWaistHeightRatio,
-  round,
 } from "./calculations.js";
-import { createDefaultData, createId, loadData, normalizeData, saveData, sortEntries, STORAGE_KEY } from "./storage.js";
+import { createDefaultData, createId, loadData, saveData, sortEntries } from "./storage.js";
 
 const root = document.querySelector("#app");
 let data = loadData();
 let state = {
-  page: "overview",
-  modal: null,
-  editingId: null,
   wizardIndex: 0,
   wizardAnswers: {},
   wizardValue: "",
@@ -28,16 +24,15 @@ let state = {
 };
 let toastTimer;
 
-const NAV = [
-  ["overview", "Overview", "grid"],
-  ["measurements", "Measurements", "ruler"],
-  ["insights", "Insights", "sparkles"],
-  ["reports", "Reports", "file"],
-  ["settings", "Settings", "settings"],
+const WORKSPACE_SECTIONS = [
+  ["overview", "Overview"],
+  ["measurements", "Measurements"],
+  ["insights", "Insights"],
+  ["reports", "Reports"],
 ];
 
 const WIZARD_STEPS = [
-  { key: "units", title: "Which units do you prefer?", copy: "Choose how measurements are displayed. You can change this later.", type: "options", options: [{ value: "metric", label: "Metric", detail: "Centimetres and kilograms" }, { value: "imperial", label: "Imperial", detail: "Feet, inches and pounds" }], optional: false },
+  { key: "units", title: "Which units do you prefer?", copy: "Choose how measurements are displayed throughout your workspace.", type: "options", options: [{ value: "metric", label: "Metric", detail: "Centimetres and kilograms" }, { value: "imperial", label: "Imperial", detail: "Feet, inches and pounds" }], optional: false },
   { key: "age", title: "How old are you?", copy: "Age is used only by calculations that require it. Adult BMI categories are limited to adults aged 20 and above.", type: "number", suffix: "years", min: 1, max: 120, step: 1 },
   { key: "height", title: "What is your height?", copy: "Enter your height. It is used by BMI, body measurement ratios, BMR and body surface area calculations.", type: "number", suffixMetric: "cm", suffixImperial: "in", minMetric: 50, maxMetric: 260, minImperial: 19.7, maxImperial: 102.4, step: 0.1 },
   { key: "weight", title: "What is your current weight?", copy: "This creates your first dated measurement when you finish setup.", type: "number", suffixMetric: "kg", suffixImperial: "lb", minMetric: 1, maxMetric: 500, minImperial: 2.2, maxImperial: 1102, step: 0.1 },
@@ -72,15 +67,10 @@ const ACTIVITY_LABELS = {
 function icon(name, size = 18) {
   const paths = {
     activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
-    grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     ruler: '<path d="m3 17 14-14 4 4L7 21H3z"/><path d="m14 6 4 4M11 9l2 2M8 12l2 2M5 15l2 2"/>',
     sparkles: '<path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3Z"/><path d="m19 14 .8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
-    settings: '<circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.6a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.6-1.4-2.4L7.7 15a8 8 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.6a8 8 0 0 1 1.5-.9l.3-1.8H14l.3 1.8a8 8 0 0 1 1.5.9l1.7-.6 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 1.8Z" transform="translate(0 -1) scale(.92) translate(1 1)"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
-    moon: '<path d="M20.9 13A8.5 8.5 0 0 1 11 3.1 8.5 8.5 0 1 0 20.9 13Z"/>',
-    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-    lock: '<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>',
     arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     back: '<path d="M19 12H5m6 6-6-6 6-6"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
@@ -89,10 +79,6 @@ function icon(name, size = 18) {
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     ruler2: '<path d="M4 4h16v16H4z"/><path d="M8 4v4m4-4v2m4-2v4m-8 10v-4m4 4v-2m4 2v-4"/>',
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
-    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
-    trash: '<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>',
-    edit: '<path d="m16 4 4 4M4 20l4-.8L19 8a2.1 2.1 0 0 0-3-3L5 16l-1 4Z"/>',
-    x: '<path d="m18 6-12 12M6 6l12 12"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
     chart: '<path d="M3 3v18h18M7 14l4-4 4 3 5-7"/>',
     heartPulse: '<path d="M20.8 8.8c0 5.5-8.8 11-8.8 11s-8.8-5.5-8.8-11A4.8 4.8 0 0 1 12 6.5a4.8 4.8 0 0 1 8.8 2.3Z"/><path d="M7 12h3l1.5-3 2.2 6 1.3-3H18"/>',
@@ -121,9 +107,7 @@ function formatNumber(value, decimals = 1) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: 0 }).format(value);
 }
 function kgToDisplay(value) { return data.preferences.units === "imperial" ? value * 2.2046226218 : value; }
-function displayToKg(value) { return data.preferences.units === "imperial" ? value / 2.2046226218 : value; }
 function cmToDisplay(value) { return data.preferences.units === "imperial" ? value / 2.54 : value; }
-function displayToCm(value) { return data.preferences.units === "imperial" ? value * 2.54 : value; }
 function unitWeight() { return data.preferences.units === "imperial" ? "lb" : "kg"; }
 function unitLength() { return data.preferences.units === "imperial" ? "in" : "cm"; }
 function displayWeight(value, decimals = 1) { return `${formatNumber(kgToDisplay(value), decimals)} ${unitWeight()}`; }
@@ -188,49 +172,29 @@ function notify(message, type = "success") {
     if (toast) toast.remove();
   }, 3000);
 }
-function persist(message = "Changes saved") {
-  const saved = saveData(data);
-  applyTheme();
-  if (!saved) {
-    notify("Could not save data. Browser storage may be full or unavailable.", "error");
-    return false;
-  }
-  if (message) notify(message);
-  else render();
-  return true;
-}
 function applyTheme() {
-  document.documentElement.dataset.theme = data.preferences.theme === "dark" ? "dark" : "light";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", data.preferences.theme === "dark" ? "#0b0b0b" : "#ffffff");
+  document.documentElement.dataset.theme = "light";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#ffffff");
 }
 
-function brand() {
-  return `<div class="brand"><div class="brand-mark">${icon("activity", 20)}</div><div><div class="brand-name">TheHealthCalculator</div><div class="brand-sub">Personal health metrics</div></div></div>`;
-}
-function navItem(page, label, iconName, active) {
-  return `<button class="nav-item ${active === page ? "active" : ""}" data-page="${page}" type="button">${icon(iconName, 17)}<span>${label}</span></button>`;
-}
-function renderNav() {
-  return `<aside class="sidebar">${brand()}<div class="nav-label">Workspace</div><nav class="nav-list" aria-label="Main navigation">${NAV.map(([page, label, iconName]) => navItem(page, label, iconName, state.page)).join("")}</nav><div class="sidebar-bottom"><div class="privacy-note"><div class="privacy-note-head">${icon("lock", 14)} Your data stays here</div><p>Measurements are saved in this browser. Nothing is sent to a health server.</p></div><div class="sidebar-foot">TheHealthCalculator · v1.0</div></div></aside>`;
-}
-function pageMeta() {
-  return {
-    overview: ["Overview", "A clear view of the measurements you have recorded."],
-    measurements: ["Measurements", "Record, review, and update your measurements over time."],
-    insights: ["Insights", "Observations generated only from measurements you entered."],
-    reports: ["Reports", "A simple summary of your recorded data and available calculations."],
-    settings: ["Settings", "Manage your profile, units, privacy, and local data."],
-  }[state.page];
+function renderWorkspaceNav() {
+  return `<nav class="workspace-nav" aria-label="Workspace sections">${WORKSPACE_SECTIONS.map(([id, label]) => `<a class="workspace-nav-link" href="#${id}" data-scroll-to="${id}">${label}</a>`).join("")}</nav>`;
 }
 function renderAppShell() {
-  const [title, subtitle] = pageMeta();
-  const body = renderPage();
-  root.innerHTML = `<div class="app-layout">${renderNav()}<main class="main"><header class="topbar"><div><div class="topbar-title">${title}</div><div class="topbar-subtitle">${subtitle}</div></div><div class="topbar-actions"><button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle dark mode">${icon(data.preferences.theme === "dark" ? "sun" : "moon", 16)}</button><button class="btn btn-primary" type="button" data-action="add-entry">${icon("plus", 15)} Add measurement</button></div></header><div class="page-content">${body}</div></main></div><nav class="mobile-nav" aria-label="Mobile navigation">${NAV.map(([page, label, iconName]) => navItem(page, label, iconName, state.page)).join("")}</nav>${state.modal ? renderModal() : ""}${state.toast ? `<div class="toast ${state.toast.type === "error" ? "error" : ""}" role="status">${esc(state.toast.message)}</div>` : ""}`;
+  root.innerHTML = `<main class="workspace-shell"><header class="workspace-topbar"><div class="workspace-heading"><h1>Workspace</h1><p>Your measurements, calculations, insights, and report in one place.</p></div><button class="btn" type="button" data-action="reset-onboarding">${icon("refresh", 15)} Reset</button></header>${renderWorkspaceNav()}<div class="page-content workspace-content">${renderWorkspace()}</div></main>${state.toast ? `<div class="toast ${state.toast.type === "error" ? "error" : ""}" role="status">${esc(state.toast.message)}</div>` : ""}`;
   drawCharts();
 }
 
+function renderWorkspace() {
+  return `<section class="workspace-section" id="overview" aria-labelledby="overview-title">${renderOverview()}</section>
+    <section class="workspace-section" id="measurements" aria-labelledby="measurements-title">${renderMeasurements()}</section>
+    <section class="workspace-section" id="insights" aria-labelledby="insights-title">${renderInsights()}</section>
+    <section class="workspace-section" id="reports" aria-labelledby="reports-title">${renderReports()}</section>`;
+}
+
 function pageHeading(title, description, action = "") {
-  return `<div class="page-heading"><div><h1>${title}</h1><p>${description}</p></div>${action ? `<div class="heading-actions">${action}</div>` : ""}</div>`;
+  const id = ({ Overview: "overview-title", Measurements: "measurements-title", Insights: "insights-title", Reports: "reports-title" })[title] || "";
+  return `<div class="page-heading"><div><h2 ${id ? `id="${id}"` : ""}>${title}</h2><p>${description}</p></div>${action ? `<div class="heading-actions">${action}</div>` : ""}</div>`;
 }
 function metricCard({ title, value, unit = "", note = "", iconName = "activity", badge = "" }) {
   const shown = value === null || value === undefined ? "—" : value;
@@ -259,16 +223,10 @@ function renderOverview() {
   if (m.sleep) latestRows.push(["Sleep duration", `${formatNumber(m.sleep.sleepHours)} hours`, formatDate(m.sleep.date)]);
   if (m.exercise) latestRows.push(["Exercise duration", `${formatNumber(m.exercise.exerciseMinutes, 0)} minutes`, formatDate(m.exercise.date)]);
 
-  const chartDescriptors = chartData();
-  const chartHtml = chartDescriptors.length ? `<div class="grid grid-2">${chartDescriptors.map((item, index) => chartCard(item, index)).join("")}</div>` : emptyState("No trends to chart yet", "A trend chart appears after you record at least two dated measurements for the same metric.", `<button class="btn btn-primary btn-sm" data-action="add-entry">${icon("plus", 14)} Add a measurement</button>`);
-  const insightItems = buildInsights().slice(0, 3);
-  return `${pageHeading("Your health overview", "Only calculations supported by your saved measurements appear here.", `<button class="btn" data-page="measurements">View measurements ${icon("arrow", 14)}</button>`)}
-    <div class="grid grid-4">${cards.length ? cards.join("") : `<div class="card" style="grid-column:1/-1">${emptyState("Your dashboard is ready", "Complete a few profile details or add a measurement. Calculations will appear as soon as their required inputs are available.", `<button class="btn btn-primary btn-sm" data-action="add-entry">${icon("plus", 14)} Add your first measurement</button>`)}</div>`}</div>
-    <div class="section-heading"><div><h2>Measurement trends</h2><p>Charts use dated entries only. No sample values are added.</p></div>${chartDescriptors.length ? `<span class="pill">${chartDescriptors.length} available</span>` : ""}</div>${chartHtml}
-    <div class="section-heading"><div><h2>Recent readings</h2><p>The latest available entry for each measurement.</p></div><button class="btn btn-sm" data-page="measurements">All records ${icon("arrow", 13)}</button></div>
-    ${latestRows.length ? `<div class="table-wrap"><table><thead><tr><th>Measurement</th><th>Latest value</th><th>Recorded</th></tr></thead><tbody>${latestRows.map(([name, value, date]) => `<tr><td><strong>${name}</strong></td><td>${value}</td><td>${date}</td></tr>`).join("")}</tbody></table></div>` : emptyState("No measurements recorded", "Use the Add measurement button to record one or more values.")}
-    <div class="section-heading"><div><h2>Recent insights</h2><p>Plain-language observations from your data.</p></div><button class="btn btn-sm" data-page="insights">All insights ${icon("arrow", 13)}</button></div>
-    ${insightItems.length ? `<div class="insight-list">${insightItems.map(renderInsight).join("")}</div>` : `<div class="card">${emptyState("No insights available", "Insights appear only when there is enough recorded information to support an observation.")}</div>`}
+  return `${pageHeading("Overview", "A clear summary of the measurements and calculations supported by your data.")}
+    <div class="grid grid-4">${cards.length ? cards.join("") : `<div class="card" style="grid-column:1/-1">${emptyState("No calculations available yet", "Your overview will show results as soon as the information needed for a calculation is entered during onboarding.")}</div>`}</div>
+    <div class="section-heading"><div><h2>Latest recorded values</h2><p>Only measurements entered during setup are shown.</p></div><span class="pill">${latestRows.length} available</span></div>
+    ${latestRows.length ? `<div class="table-wrap"><table><thead><tr><th>Measurement</th><th>Latest value</th><th>Recorded</th></tr></thead><tbody>${latestRows.map(([name, value, date]) => `<tr><td><strong>${name}</strong></td><td>${value}</td><td>${date}</td></tr>`).join("")}</tbody></table></div>` : emptyState("No measurements recorded", "No measurement values were entered during onboarding.")}
     <div class="callout" style="margin-top:18px">${icon("info", 15)}<div><strong>Not a medical assessment.</strong> These calculations are estimates and screening measures. They cannot diagnose a condition or replace advice from a qualified health professional.</div></div>`;
 }
 
@@ -371,16 +329,17 @@ function renderInsight(item) {
 }
 function renderMeasurements() {
   const rows = sortedDesc();
-  return `${pageHeading("Measurements", "Each entry keeps its own date. Add only the values you actually measured.", `<button class="btn btn-primary" data-action="add-entry">${icon("plus", 15)} Add measurement</button>`)}
-    <div class="callout" style="margin-bottom:15px">${icon("info", 15)}<div>Height is stored in your profile (${Number.isFinite(data.profile.heightCm) ? displayLength(data.profile.heightCm) : "not entered"}). Other readings are saved as dated entries. You can edit or delete any entry.</div></div>
-    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Weight</th><th>Waist</th><th>Hip</th><th>BP (mmHg)</th><th>Resting HR</th><th>Sleep</th><th>Exercise</th><th></th></tr></thead><tbody>${rows.map((entry) => { const values = entryValues(entry); return `<tr><td><strong>${formatDate(entry.date)}</strong></td><td>${values.weight}</td><td>${values.waist}</td><td>${values.hip}</td><td>${values.bp}</td><td>${values.hr}</td><td>${values.sleep}</td><td>${values.exercise}</td><td><div class="table-actions"><button class="icon-btn" title="Edit entry" aria-label="Edit entry" data-action="edit-entry" data-id="${esc(entry.id)}">${icon("edit", 14)}</button><button class="icon-btn" title="Delete entry" aria-label="Delete entry" data-action="delete-entry" data-id="${esc(entry.id)}">${icon("trash", 14)}</button></div></td></tr>`; }).join("")}</tbody></table></div><div class="card-description" style="margin-top:10px">${rows.length} record${rows.length === 1 ? "" : "s"} · Newest first</div>` : emptyState("No measurements yet", "Add a dated measurement. You can enter one value or several values in the same record.", `<button class="btn btn-primary btn-sm" data-action="add-entry">${icon("plus", 14)} Add first measurement</button>`)}
-    <div class="section-heading"><div><h2>Charts</h2><p>Only metrics with at least two dated readings are charted.</p></div></div>
-    ${chartData().length ? `<div class="grid grid-2">${chartData().map(chartCard).join("")}</div>` : `<div class="card-description">There are not enough repeated measurements to create a trend chart yet.</div>`}`;
+  const charts = chartData();
+  return `${pageHeading("Measurements", "The information you entered during onboarding, with its recorded date.")}
+    <div class="callout" style="margin-bottom:15px">${icon("info", 15)}<div>Height is stored in your profile (${Number.isFinite(data.profile.heightCm) ? displayLength(data.profile.heightCm) : "not entered"}). Other readings are saved as dated entries. To start again with different information, use Reset at the top of this workspace.</div></div>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Weight</th><th>Waist</th><th>Hip</th><th>BP (mmHg)</th><th>Resting HR</th><th>Sleep</th><th>Exercise</th></tr></thead><tbody>${rows.map((entry) => { const values = entryValues(entry); return `<tr><td><strong>${formatDate(entry.date)}</strong></td><td>${values.weight}</td><td>${values.waist}</td><td>${values.hip}</td><td>${values.bp}</td><td>${values.hr}</td><td>${values.sleep}</td><td>${values.exercise}</td></tr>`; }).join("")}</tbody></table></div><div class="card-description" style="margin-top:10px">${rows.length} record${rows.length === 1 ? "" : "s"} · Newest first</div>` : emptyState("No measurements recorded", "No measurement values were entered during onboarding.")}
+    <div class="section-heading"><div><h2>Measurement trends</h2><p>Trend charts appear only when two or more dated readings exist for the same measurement.</p></div></div>
+    ${charts.length ? `<div class="grid grid-2">${charts.map(chartCard).join("")}</div>` : `<div class="empty-state compact-empty"><p>There are not enough repeated measurements to create a trend chart. No sample data has been added.</p></div>`}`;
 }
 function renderInsights() {
   const insights = buildInsights();
-  return `${pageHeading("Your insights", "Calculations and observations are based exclusively on your recorded data.")}
-    ${insights.length ? `<div class="insight-list">${insights.map(renderInsight).join("")}</div>` : `<div class="card">${emptyState("Nothing to interpret yet", "Add the measurements needed for a calculation. The app will not fill in missing information or create unsupported conclusions.", `<button class="btn btn-primary btn-sm" data-action="add-entry">${icon("plus", 14)} Add measurement</button>`)}</div>`}
+  return `${pageHeading("Insights", "Calculations and observations based exclusively on the information you entered.")}
+    ${insights.length ? `<div class="insight-list">${insights.map(renderInsight).join("")}</div>` : `<div class="card">${emptyState("No supported insights yet", "Insights appear only when the entered information supports a calculation or comparison. No missing information is assumed.")}</div>`}
     <div class="callout" style="margin-top:18px">${icon("shield", 15)}<div><strong>How insights work.</strong> Each observation identifies the measurement or calculation behind it. The app does not diagnose conditions, produce an overall health score, or infer lifestyle facts you did not enter.</div></div>`;
 }
 
@@ -422,75 +381,6 @@ function renderReportDocument() {
 function renderReports() {
   return `${pageHeading("Reports", "Review, print, or save a summary containing only the data you have entered.", `<div class="report-actions"><button class="btn" data-action="download-report">${icon("download", 14)} Download text</button><button class="btn btn-primary" data-action="print-report">${icon("fileDown", 14)} Print / save PDF</button></div>`)}${renderReportDocument()}`;
 }
-function renderSettings() {
-  const profile = data.profile;
-  const heightValue = Number.isFinite(profile.heightCm) ? formatNumber(cmToDisplay(profile.heightCm), 1) : "";
-  const ageValue = Number.isFinite(profile.age) ? profile.age : "";
-  const eqValue = Number.isFinite(profile.equationOffset) ? String(profile.equationOffset) : "";
-  return `${pageHeading("Settings", "Update your profile and choose how your local data is handled.")}
-    <div class="settings-grid">
-      <section class="card settings-section"><div><h2 class="card-title">Personal profile</h2><p class="card-description">Used only when a calculation requires the value.</p></div>
-        <form data-form="profile"><div class="form-grid">
-          <div class="field"><label for="profile-age">Age</label><div class="field-suffix"><input class="input" id="profile-age" name="age" type="number" min="1" max="120" step="1" value="${ageValue}" placeholder="Not provided"/><span>years</span></div></div>
-          <div class="field"><label for="profile-height">Height</label><div class="field-suffix"><input class="input" id="profile-height" name="height" type="number" min="${data.preferences.units === "imperial" ? "19.7" : "50"}" max="${data.preferences.units === "imperial" ? "102.4" : "260"}" step="0.1" value="${heightValue}" placeholder="Not provided"/><span>${unitLength()}</span></div></div>
-          <div class="field"><label for="profile-activity">Typical activity level</label><select class="select" id="profile-activity" name="activity"><option value="">Not provided</option>${Object.entries(ACTIVITY_LABELS).map(([value, label]) => `<option value="${value}" ${profile.activityLevel === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
-          <div class="field"><label for="profile-equation">Mifflin–St Jeor equation constant</label><select class="select" id="profile-equation" name="equation"><option value="">Not provided</option><option value="5" ${eqValue === "5" ? "selected" : ""}>Male coefficient (+5)</option><option value="-161" ${eqValue === "-161" ? "selected" : ""}>Female coefficient (−161)</option><option value="-78" ${eqValue === "-78" ? "selected" : ""}>Midpoint coefficient (−78)</option></select><span class="field-hint">This is an equation choice, not a user identity label.</span></div>
-        </div><div class="form-actions"><button class="btn btn-primary" type="submit">Save profile</button></div></form>
-      </section>
-      <section class="card settings-section"><div><h2 class="card-title">Appearance and units</h2><p class="card-description">These preferences affect display only, not stored values.</p></div>
-        <div class="settings-item"><div><strong>Measurement units</strong><p>Switch between metric and imperial units.</p></div><select class="select inline-control" data-action="change-units"><option value="metric" ${data.preferences.units === "metric" ? "selected" : ""}>Metric</option><option value="imperial" ${data.preferences.units === "imperial" ? "selected" : ""}>Imperial</option></select></div>
-        <div class="settings-item"><div><strong>Color theme</strong><p>Use a white or black interface.</p></div><button class="btn btn-sm" data-action="toggle-theme">${icon(data.preferences.theme === "dark" ? "sun" : "moon", 14)} ${data.preferences.theme === "dark" ? "Light" : "Dark"}</button></div>
-      </section>
-      <section class="card settings-section"><div><h2 class="card-title">Your data</h2><p class="card-description">Export or restore your local measurement data.</p></div>
-        <div class="settings-item"><div><strong>Export backup</strong><p>Download a JSON file with profile and measurements.</p></div><button class="btn btn-sm" data-action="export-json">${icon("download", 14)} Export JSON</button></div>
-        <div class="settings-item"><div><strong>Import backup</strong><p>Restore a previous JSON export. This replaces current data.</p></div><button class="btn btn-sm" data-action="import-click">${icon("upload", 14)} Import JSON</button></div>
-        <div class="settings-item"><div><strong>Export measurements</strong><p>Download the measurement history as CSV.</p></div><button class="btn btn-sm" data-action="export-csv">${icon("fileDown", 14)} Export CSV</button></div>
-        <input type="file" id="import-file" accept="application/json,.json" hidden />
-      </section>
-      <section class="card settings-section"><div><h2 class="card-title">Privacy and reset</h2><p class="card-description">No account or remote health database is used.</p></div>
-        <div class="callout">${icon("lock", 15)}<div><strong>Browser-only storage.</strong> Data is saved in this browser's local storage. It is not encrypted by this app and may be accessible to other people who use the same browser profile. Export a backup before clearing browser data.</div></div>
-        <div class="settings-item"><div><strong>Delete all app data</strong><p>Remove your profile, preferences, and measurement history from this browser.</p></div><button class="btn btn-danger btn-sm" data-action="reset-data">${icon("trash", 14)} Delete data</button></div>
-      </section>
-    </div>
-    <div class="section-heading"><div><h2>Calculation references</h2><p>Reference guidance used for the initial calculation set.</p></div></div>
-    <div class="card"><div class="settings-item"><div><strong>Adult BMI categories</strong><p>CDC explains adult BMI categories and notes BMI is a screening measure.</p></div><a class="btn btn-sm" href="https://www.cdc.gov/bmi/adult-calculator/bmi-categories.html" target="_blank" rel="noopener noreferrer">CDC reference ↗</a></div>
-      <div class="settings-item"><div><strong>Waist-to-height ratio</strong><p>NICE guidance for adults with BMI below 35; use alongside BMI.</p></div><a class="btn btn-sm" href="https://www.nice.org.uk/guidance/ng246/chapter/Identifying-and-assessing-overweight-obesity-and-central-adiposity" target="_blank" rel="noopener noreferrer">NICE guidance ↗</a></div>
-      <div class="settings-item"><div><strong>Mifflin–St Jeor equation</strong><p>Original predictive equation for resting energy expenditure.</p></div><a class="btn btn-sm" href="https://pubmed.ncbi.nlm.nih.gov/2305711/" target="_blank" rel="noopener noreferrer">PubMed paper ↗</a></div>
-      <div class="settings-item"><div><strong>Mosteller body surface area</strong><p>Formula reference for the estimated body surface area calculation.</p></div><a class="btn btn-sm" href="https://www.eviq.org.au/clinical-resources/eviq-calculators/3198-body-surface-area-calculator" target="_blank" rel="noopener noreferrer">eviQ reference ↗</a></div>
-    </div>`;
-}
-function renderPage() {
-  switch (state.page) {
-    case "measurements": return renderMeasurements();
-    case "insights": return renderInsights();
-    case "reports": return renderReports();
-    case "settings": return renderSettings();
-    default: return renderOverview();
-  }
-}
-
-function renderModal() {
-  const entry = state.editingId ? data.entries.find((item) => item.id === state.editingId) : null;
-  const editing = Boolean(entry);
-  const value = (key) => {
-    if (!entry || !Number.isFinite(entry[key])) return "";
-    if (key === "weightKg") return formatNumber(kgToDisplay(entry[key]), 1);
-    if (key === "waistCm" || key === "hipCm") return formatNumber(cmToDisplay(entry[key]), 1);
-    return entry[key];
-  };
-  return `<div class="modal-backdrop" data-action="backdrop-close"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="measurement-modal-title"><div class="modal-head"><div><h2 id="measurement-modal-title">${editing ? "Edit measurement" : "Add measurement"}</h2><p>Enter only the values you measured. At least one value is required.</p></div><button class="icon-btn" data-action="close-modal" aria-label="Close dialog">${icon("x", 16)}</button></div>
-    <form data-form="measurement"><div class="form-grid">
-      <div class="field"><label for="entry-date">Measurement date</label><input class="input" id="entry-date" name="date" type="date" max="${todayISO()}" required value="${entry ? esc(entry.date) : todayISO()}"/></div>
-      <div class="field"><label for="entry-weight">Weight</label><div class="field-suffix"><input class="input" id="entry-weight" name="weight" type="number" min="${data.preferences.units === "imperial" ? "2.2" : "1"}" max="${data.preferences.units === "imperial" ? "1102" : "500"}" step="0.1" placeholder="Optional" value="${value("weightKg")}"/><span>${unitWeight()}</span></div></div>
-      <div class="field"><label for="entry-waist">Waist circumference</label><div class="field-suffix"><input class="input" id="entry-waist" name="waist" type="number" min="${data.preferences.units === "imperial" ? "7.9" : "20"}" max="${data.preferences.units === "imperial" ? "98.4" : "250"}" step="0.1" placeholder="Optional" value="${value("waistCm")}"/><span>${unitLength()}</span></div></div>
-      <div class="field"><label for="entry-hip">Hip circumference</label><div class="field-suffix"><input class="input" id="entry-hip" name="hip" type="number" min="${data.preferences.units === "imperial" ? "7.9" : "20"}" max="${data.preferences.units === "imperial" ? "98.4" : "250"}" step="0.1" placeholder="Optional" value="${value("hipCm")}"/><span>${unitLength()}</span></div></div>
-      <div class="field"><label for="entry-systolic">Systolic blood pressure</label><div class="field-suffix"><input class="input" id="entry-systolic" name="systolic" type="number" min="30" max="300" step="1" placeholder="Optional" value="${value("systolic")}"/><span>mmHg</span></div></div>
-      <div class="field"><label for="entry-diastolic">Diastolic blood pressure</label><div class="field-suffix"><input class="input" id="entry-diastolic" name="diastolic" type="number" min="20" max="250" step="1" placeholder="Optional" value="${value("diastolic")}"/><span>mmHg</span></div></div>
-      <div class="field"><label for="entry-heart-rate">Resting heart rate</label><div class="field-suffix"><input class="input" id="entry-heart-rate" name="heartRate" type="number" min="20" max="250" step="1" placeholder="Optional" value="${value("restingHeartRate")}"/><span>bpm</span></div></div>
-      <div class="field"><label for="entry-sleep">Sleep duration</label><div class="field-suffix"><input class="input" id="entry-sleep" name="sleep" type="number" min="0.1" max="24" step="0.1" placeholder="Optional" value="${value("sleepHours")}"/><span>hours</span></div></div>
-      <div class="field"><label for="entry-exercise">Exercise duration</label><div class="field-suffix"><input class="input" id="entry-exercise" name="exercise" type="number" min="0" max="1440" step="1" placeholder="Optional" value="${value("exerciseMinutes")}"/><span>min</span></div></div>
-    </div><div class="form-actions"><button class="btn" type="button" data-action="close-modal">Cancel</button><button class="btn btn-primary" type="submit">${editing ? "Save changes" : "Save measurement"}</button></div></form></section></div>`;
-}
 
 function renderWizard() {
   const step = WIZARD_STEPS[state.wizardIndex];
@@ -505,9 +395,9 @@ function renderWizard() {
     const suffix = step.suffix || (imperial ? step.suffixImperial : step.suffixMetric);
     const min = imperial ? (step.minImperial ?? step.min) : (step.minMetric ?? step.min);
     const max = imperial ? (step.maxImperial ?? step.max) : (step.maxMetric ?? step.max);
-    control = `<div class="wizard-input-wrap"><input class="input wizard-input" id="wizard-input" name="wizardValue" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step.step}" placeholder="Enter value" value="${esc(state.wizardValue)}" autocomplete="off"/><span>${suffix}</span></div>`;
+    control = `<div class="wizard-input-wrap"><input class="input wizard-input" id="wizard-input" name="wizardValue" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step.step}" data-min="${min}" data-max="${max}" data-step="${step.step}" placeholder="Enter value" value="${esc(state.wizardValue)}" autocomplete="off"/><div class="number-stepper-group" role="group" aria-label="Adjust ${esc(step.title.toLowerCase())}"><button class="number-stepper-btn" type="button" data-stepper="-1" aria-label="Decrease value">−</button><button class="number-stepper-btn" type="button" data-stepper="1" aria-label="Increase value">+</button></div><span class="wizard-suffix">${suffix}</span></div>`;
   }
-  root.innerHTML = `<div class="wizard-shell"><aside class="wizard-aside">${brand()}<div class="wizard-aside-content"><h1>Understand your health, one measurement at a time.</h1><p>A private space for your measurements, transparent calculations, and trends that come only from data you choose to enter.</p></div><div class="wizard-aside-foot">No diagnosis. No invented measurements. Your data stays in this browser.</div></aside><main class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>PERSONAL SETUP</span><span>Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions"><button class="btn btn-ghost" type="button" data-action="wizard-back" ${state.wizardIndex === 0 ? "disabled" : ""}>${icon("back", 14)} Back</button><div class="wizard-actions-right">${step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div><p class="card-description" style="margin-top:28px">You can skip optional questions and add information later.</p></div></main></div>`;
+  root.innerHTML = `<main class="wizard-shell wizard-shell-simple"><div class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>YOUR HEALTH PROFILE</span><span>Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions"><button class="btn btn-ghost" type="button" data-action="wizard-back" ${state.wizardIndex === 0 ? "disabled" : ""}>${icon("back", 14)} Back</button><div class="wizard-actions-right">${step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div><p class="card-description" style="margin-top:28px">Skip optional questions and continue with the information you have.</p></div></div></main>`;
   const input = root.querySelector("#wizard-input");
   if (input) input.focus({ preventScroll: true });
 }
@@ -597,70 +487,9 @@ function finishWizard() {
   data.onboardingComplete = true;
   saveData(data);
   applyTheme();
-  state.page = "overview";
   state.wizardAnswers = {};
   state.wizardIndex = 0;
   notify("Your health workspace is ready.");
-}
-
-function saveMeasurement(form) {
-  const values = new FormData(form);
-  const date = String(values.get("date") || "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) return notify("Choose a valid date that is not in the future.", "error");
-  const fields = [
-    ["weight", "weightKg", data.preferences.units === "imperial" ? (v) => v / 2.2046226218 : (v) => v, 1, data.preferences.units === "imperial" ? 1102 : 500],
-    ["waist", "waistCm", data.preferences.units === "imperial" ? (v) => v * 2.54 : (v) => v, data.preferences.units === "imperial" ? 7.9 : 20, data.preferences.units === "imperial" ? 98.4 : 250],
-    ["hip", "hipCm", data.preferences.units === "imperial" ? (v) => v * 2.54 : (v) => v, data.preferences.units === "imperial" ? 7.9 : 20, data.preferences.units === "imperial" ? 98.4 : 250],
-    ["systolic", "systolic", (v) => v, 30, 300],
-    ["diastolic", "diastolic", (v) => v, 20, 250],
-    ["heartRate", "restingHeartRate", (v) => v, 20, 250],
-    ["sleep", "sleepHours", (v) => v, 0.1, 24],
-    ["exercise", "exerciseMinutes", (v) => v, 0, 1440],
-  ];
-  const entry = { id: state.editingId || createId(), date, createdAt: new Date().toISOString() };
-  let count = 0;
-  for (const [formKey, key, convert, min, max] of fields) {
-    const raw = String(values.get(formKey) ?? "").trim();
-    if (!raw) continue;
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric) || numeric < min || numeric > max) return notify(`Check the value entered for ${formKey}.`, "error");
-    entry[key] = convert(numeric);
-    count += 1;
-  }
-  if (count === 0) return notify("Enter at least one measurement before saving.", "error");
-  if (Number.isFinite(entry.systolic) && Number.isFinite(entry.diastolic) && entry.systolic <= entry.diastolic) return notify("Systolic pressure must be higher than diastolic pressure for these derived calculations.", "error");
-  const wasEditing = Boolean(state.editingId);
-  if (wasEditing) {
-    data.entries = data.entries.map((item) => item.id === state.editingId ? entry : item);
-  } else {
-    data.entries.push(entry);
-  }
-  state.modal = null;
-  state.editingId = null;
-  persist(wasEditing ? "Measurement updated" : "Measurement saved");
-}
-
-function saveProfile(form) {
-  const values = new FormData(form);
-  const ageRaw = String(values.get("age") || "").trim();
-  const heightRaw = String(values.get("height") || "").trim();
-  const activity = String(values.get("activity") || "");
-  const equation = String(values.get("equation") || "");
-  if (ageRaw) {
-    const age = Number(ageRaw);
-    if (!Number.isInteger(age) || age < 1 || age > 120) return notify("Age must be a whole number between 1 and 120.", "error");
-    data.profile.age = age;
-  } else delete data.profile.age;
-  if (heightRaw) {
-    const height = Number(heightRaw);
-    const min = data.preferences.units === "imperial" ? 19.7 : 50;
-    const max = data.preferences.units === "imperial" ? 102.4 : 260;
-    if (!Number.isFinite(height) || height < min || height > max) return notify(`Height must be between ${min} and ${max} ${unitLength()}.`, "error");
-    data.profile.heightCm = data.preferences.units === "imperial" ? height * 2.54 : height;
-  } else delete data.profile.heightCm;
-  if (activity) data.profile.activityLevel = activity; else delete data.profile.activityLevel;
-  if (equation && ["5", "-161", "-78"].includes(equation)) data.profile.equationOffset = Number(equation); else delete data.profile.equationOffset;
-  persist("Profile updated");
 }
 
 function downloadFile(filename, content, type) {
@@ -674,24 +503,10 @@ function downloadFile(filename, content, type) {
   link.remove();
   URL.revokeObjectURL(url);
 }
-function exportJSON() {
-  downloadFile(`thehealthcalculator-backup-${todayISO()}.json`, JSON.stringify(data, null, 2), "application/json");
-  notify("JSON backup exported");
-}
-function exportCSV() {
-  const headers = ["date", "weight_kg", "waist_cm", "hip_cm", "systolic_mmhg", "diastolic_mmhg", "resting_heart_rate_bpm", "sleep_hours", "exercise_minutes"];
-  const quote = (value) => value === undefined ? "" : `"${String(value).replace(/"/g, '""')}"`;
-  const rows = sortEntries(data.entries).map((entry) => headers.map((header) => {
-    const key = { weight_kg: "weightKg", waist_cm: "waistCm", hip_cm: "hipCm", systolic_mmhg: "systolic", diastolic_mmhg: "diastolic", resting_heart_rate_bpm: "restingHeartRate", sleep_hours: "sleepHours", exercise_minutes: "exerciseMinutes" }[header];
-    return quote(header === "date" ? entry.date : entry[key]);
-  }).join(","));
-  downloadFile(`thehealthcalculator-measurements-${todayISO()}.csv`, [headers.join(","), ...rows].join("\n"), "text/csv;charset=utf-8");
-  notify("CSV exported");
-}
 function downloadReport() {
   const report = reportRows();
   const lines = [
-    "THEHEALTHCALCULATOR — PERSONAL HEALTH SUMMARY",
+    "HEALTH WORKSPACE — PERSONAL HEALTH SUMMARY",
     `Generated: ${formatDate(todayISO())}`,
     `Measurement records: ${data.entries.length}`,
     "",
@@ -707,11 +522,32 @@ function downloadReport() {
     "LIMITATIONS",
     "This summary is not a medical record or diagnosis. Calculations are estimates and screening measures. Missing measurements are intentionally left blank. Discuss medical decisions with a qualified health professional.",
   ];
-  downloadFile(`thehealthcalculator-report-${todayISO()}.txt`, lines.join("\n"), "text/plain;charset=utf-8");
+  downloadFile(`health-workspace-report-${todayISO()}.txt`, lines.join("\n"), "text/plain;charset=utf-8");
   notify("Text report exported");
 }
 
 function handleClick(event) {
+  const stepper = event.target.closest("[data-stepper]");
+  if (stepper) {
+    const input = root.querySelector("#wizard-input");
+    if (!input) return;
+    const min = Number(input.dataset.min);
+    const max = Number(input.dataset.max);
+    const step = Number(input.dataset.step);
+    const current = input.value === "" ? min : Number(input.value);
+    const next = Math.min(max, Math.max(min, current + Number(stepper.dataset.stepper) * step));
+    const decimals = (String(step).split(".")[1] || "").length;
+    state.wizardValue = String(Number(next.toFixed(decimals)));
+    state.wizardError = "";
+    renderWizard();
+    return;
+  }
+  const scrollTarget = event.target.closest("[data-scroll-to]");
+  if (scrollTarget) {
+    event.preventDefault();
+    root.querySelector(`#${scrollTarget.dataset.scrollTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   const option = event.target.closest("[data-wizard-option]");
   if (option) {
     const value = option.dataset.wizardOption;
@@ -722,44 +558,22 @@ function handleClick(event) {
     renderWizard();
     return;
   }
-  const target = event.target.closest("[data-page], [data-action]");
+  const target = event.target.closest("[data-action]");
   if (!target) return;
-  if (target.dataset.page) {
-    state.page = target.dataset.page;
-    state.modal = null;
-    render();
-    return;
-  }
   const action = target.dataset.action;
   switch (action) {
-    case "add-entry": state.modal = "measurement"; state.editingId = null; render(); break;
-    case "edit-entry": state.modal = "measurement"; state.editingId = target.dataset.id; render(); break;
-    case "delete-entry": {
-      const id = target.dataset.id;
-      if (window.confirm("Delete this measurement entry? This cannot be undone.")) {
-        data.entries = data.entries.filter((entry) => entry.id !== id);
-        persist("Measurement deleted");
-      }
-      break;
-    }
-    case "close-modal": state.modal = null; state.editingId = null; render(); break;
-    case "backdrop-close": if (event.target === target) { state.modal = null; state.editingId = null; render(); } break;
     case "wizard-back": wizardBack(); break;
     case "wizard-next": wizardNext(false); break;
     case "wizard-skip": wizardNext(true); break;
-    case "toggle-theme": data.preferences.theme = data.preferences.theme === "dark" ? "light" : "dark"; persist(null); break;
-    case "change-units": break;
-    case "export-json": exportJSON(); break;
-    case "export-csv": exportCSV(); break;
     case "download-report": downloadReport(); break;
     case "print-report": window.print(); break;
-    case "import-click": root.querySelector("#import-file")?.click(); break;
-    case "reset-data": {
-      if (window.confirm("Permanently delete the profile, preferences, and all measurements saved by this app in this browser?")) {
+    case "reset-onboarding": {
+      if (window.confirm("Reset your workspace and clear the information saved in this browser? You will return to the first onboarding question.")) {
         data = createDefaultData();
         saveData(data);
-        state = { ...state, page: "overview", modal: null, editingId: null, wizardIndex: 0, wizardAnswers: {}, wizardValue: "", wizardError: "", tempUnits: "metric" };
-        applyTheme(); renderWizard();
+        state = { wizardIndex: 0, wizardAnswers: {}, wizardValue: "", wizardError: "", tempUnits: "metric", toast: null };
+        applyTheme();
+        renderWizard();
       }
       break;
     }
@@ -767,43 +581,6 @@ function handleClick(event) {
   }
 }
 
-function handleSubmit(event) {
-  const form = event.target.closest("form[data-form]");
-  if (!form) return;
-  event.preventDefault();
-  if (form.dataset.form === "measurement") saveMeasurement(form);
-  if (form.dataset.form === "profile") saveProfile(form);
-}
-function handleChange(event) {
-  if (event.target.matches("[data-action='change-units']")) {
-    data.preferences.units = event.target.value === "imperial" ? "imperial" : "metric";
-    persist("Units updated");
-  }
-  if (event.target.id === "import-file") {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const imported = normalizeData(JSON.parse(String(reader.result)));
-        if (!window.confirm(`Import ${imported.entries.length} measurement record(s) and replace the data currently saved in this browser?`)) return;
-        data = imported;
-        saveData(data);
-        applyTheme();
-        state.page = data.onboardingComplete ? "overview" : "overview";
-        state.modal = null;
-        render();
-        notify("Backup imported successfully");
-      } catch (error) {
-        notify(error instanceof Error ? error.message : "Could not read that backup file.", "error");
-      } finally {
-        event.target.value = "";
-      }
-    };
-    reader.onerror = () => notify("Could not read that file.", "error");
-    reader.readAsText(file);
-  }
-}
 function handleInput(event) {
   if (event.target.id === "wizard-input") {
     state.wizardValue = event.target.value;
@@ -818,15 +595,8 @@ function render() {
 }
 
 root.addEventListener("click", handleClick);
-root.addEventListener("submit", handleSubmit);
-root.addEventListener("change", handleChange);
 root.addEventListener("input", handleInput);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.modal) {
-    state.modal = null;
-    state.editingId = null;
-    render();
-  }
   if (event.key === "Enter" && !event.shiftKey && !data.onboardingComplete && event.target?.id === "wizard-input") {
     event.preventDefault();
     wizardNext(false);

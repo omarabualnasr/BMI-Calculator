@@ -22,27 +22,6 @@
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #0b0b0b;
-  --surface: #141414;
-  --surface-2: #1a1a1a;
-  --surface-3: #222222;
-  --text: #f5f5f5;
-  --muted: #a4a4a4;
-  --subtle: #777777;
-  --border: #292929;
-  --border-strong: #3b3b3b;
-  --accent: #f5f5f5;
-  --accent-text: #111111;
-  --good: #8bc6a0;
-  --good-bg: #13241a;
-  --caution: #e3bb77;
-  --caution-bg: #282014;
-  --danger: #e59b9b;
-  --danger-bg: #2a1717;
-  --shadow: 0 18px 60px rgba(0,0,0,.35);
-}
 
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--bg); }
@@ -288,4 +267,73 @@ tr:last-child td { border-bottom: 0; }
   .report-row, .report-section h3 { border-color: #ddd; }
   .report-note { color: #444; }
   @page { margin: 18mm; }
+}
+
+
+/* Single-view Workspace refresh */
+html { scroll-behavior: smooth; }
+.workspace-shell { min-height: 100vh; width: 100%; background: var(--bg); }
+.workspace-topbar { width: min(1280px, 100%); min-height: 104px; margin: 0 auto; padding: 24px 36px 20px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.workspace-heading h1 { margin: 0; font-size: 25px; line-height: 1.2; letter-spacing: -.8px; font-weight: 800; }
+.workspace-heading p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+.workspace-nav { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 5px; width: 100%; padding: 10px max(24px, calc((100% - 1208px) / 2)); overflow-x: auto; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.94); backdrop-filter: blur(12px); }
+.workspace-nav-link { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 12px; border: 1px solid transparent; border-radius: 7px; color: #666; text-decoration: none; font-size: 12px; font-weight: 600; white-space: nowrap; transition: background .15s, color .15s, border-color .15s; }
+.workspace-nav-link:hover { background: #f4f4f5; color: #111; }
+.workspace-content { max-width: 1280px; margin: 0 auto; padding: 30px 36px 72px; }
+.workspace-section { scroll-margin-top: 74px; padding: 0 0 42px; margin: 0 0 38px; border-bottom: 1px solid var(--border); }
+.workspace-section:last-child { border-bottom: 0; margin-bottom: 0; }
+.workspace-section .page-heading { margin-bottom: 20px; }
+.workspace-section .page-heading h2 { margin: 0; font-size: 21px; line-height: 1.25; letter-spacing: -.65px; font-weight: 800; }
+.workspace-section .page-heading p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+.workspace-section .section-heading { margin-top: 24px; }
+.workspace-section .report-document { max-width: 100%; }
+.compact-empty { margin-top: 8px; padding: 14px 16px; }
+.compact-empty p { margin: 0; color: var(--muted); font-size: 11px; }
+
+/* Guided onboarding numeric controls styled like shadcn outline buttons */
+.wizard-shell-simple { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
+.wizard-shell-simple .wizard-main { width: 100%; min-height: auto; padding: 24px; }
+.wizard-shell-simple .wizard-panel { width: min(540px, 100%); padding: 30px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 8px 30px rgba(0,0,0,.045); }
+.wizard-shell-simple .wizard-top { margin-bottom: 12px; }
+.wizard-shell-simple .wizard-panel h2 { font-size: clamp(25px, 4vw, 31px); }
+.wizard-input-wrap .input { padding-right: 150px; }
+.wizard-suffix { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 12px; pointer-events: none; }
+.number-stepper-group { position: absolute; top: 50%; right: 50px; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.035); }
+.number-stepper-btn { display: inline-grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #333; font-size: 17px; line-height: 1; font-weight: 500; transition: background .14s, color .14s; }
+.number-stepper-btn:hover { background: #f1f1f2; color: #09090b; }
+.number-stepper-btn:active { background: #e7e7e9; }
+.number-stepper-btn:focus-visible { outline: 2px solid #a1a1aa; outline-offset: 1px; }
+.input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.input[type="number"]::-webkit-inner-spin-button,
+.input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+@media (max-width: 760px) {
+  .workspace-topbar { min-height: 88px; padding: 19px 17px 15px; }
+  .workspace-heading h1 { font-size: 22px; }
+  .workspace-heading p { max-width: 250px; font-size: 10px; }
+  .workspace-nav { padding: 8px 12px; }
+  .workspace-content { padding: 24px 16px 48px; }
+  .workspace-section { padding-bottom: 30px; margin-bottom: 28px; }
+  .workspace-section .page-heading h2 { font-size: 19px; }
+  .workspace-shell .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-shell .grid-2 { grid-template-columns: 1fr; }
+  .wizard-shell-simple { padding: 10px; }
+  .wizard-shell-simple .wizard-main { padding: 16px 10px; }
+  .wizard-shell-simple .wizard-panel { padding: 23px 19px; }
+}
+@media (max-width: 420px) {
+  .workspace-topbar { align-items: center; }
+  .workspace-topbar > .btn { min-height: 35px; padding: 7px 10px; }
+  .workspace-shell .grid-4 { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .workspace-shell .metric-card { min-height: 126px; padding: 13px; }
+  .workspace-shell .metric-value { font-size: 22px; }
+  .wizard-input-wrap .input { padding-right: 136px; }
+  .number-stepper-group { right: 43px; }
+  .number-stepper-btn { width: 24px; height: 26px; }
+  .wizard-suffix { right: 10px; font-size: 11px; }
+}
+@media print {
+  .workspace-topbar, .workspace-nav, .report-actions, .toast { display: none !important; }
+  .workspace-content { padding: 0 !important; }
+  .workspace-section { border: 0; margin: 0 0 22px; padding: 0; break-inside: avoid; }
 }

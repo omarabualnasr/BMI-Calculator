@@ -17,13 +17,14 @@ let data = loadData();
 let state = {
   wizardIndex: data.onboardingComplete && data.preferences.appearanceConfigured !== true ? 1 : 0,
   appearanceOnly: data.onboardingComplete && data.preferences.appearanceConfigured !== true,
+  showWelcome: !data.onboardingComplete || data.preferences.appearanceConfigured !== true,
   wizardAnswers: {},
   wizardValue: "",
   wizardError: "",
   tempUnits: data.preferences.units,
   tempTheme: data.preferences.theme || "light",
-  tempAccent: data.preferences.accentColor || "blue",
 };
+let welcomeTimer = null;
 
 const WORKSPACE_SECTIONS = [
   ["overview", "Overview"],
@@ -34,7 +35,7 @@ const WORKSPACE_SECTIONS = [
 
 const WIZARD_STEPS = [
   { key: "units", title: "Which units do you prefer?", copy: "Choose how measurements are displayed throughout your workspace.", type: "options", options: [{ value: "metric", label: "Metric", detail: "Centimetres and kilograms" }, { value: "imperial", label: "Imperial", detail: "Feet, inches and pounds" }], optional: false },
-  { key: "appearance", title: "Make your workspace yours", copy: "Choose a light or dark interface and an accent color. You can change these choices the next time you reset onboarding.", type: "appearance", optional: false },
+  { key: "appearance", title: "Choose your appearance", copy: "Choose a light or dark interface for your workspace.", type: "appearance", optional: false },
   { key: "age", title: "How old are you?", copy: "Age is used only by calculations that require it. Adult BMI categories are limited to adults aged 20 and above.", type: "number", suffix: "years", min: 1, max: 120, step: 1 },
   { key: "height", title: "What is your height?", copy: "Enter your height. It is used by BMI, body measurement ratios, BMR and body surface area calculations.", type: "number", suffixMetric: "cm", suffixImperial: "in", minMetric: 50, maxMetric: 260, minImperial: 19.7, maxImperial: 102.4, step: 0.1 },
   { key: "weight", title: "What is your current weight?", copy: "This creates your first dated measurement when you finish setup.", type: "number", suffixMetric: "kg", suffixImperial: "lb", minMetric: 1, maxMetric: 500, minImperial: 2.2, maxImperial: 1102, step: 0.1 },
@@ -57,16 +58,6 @@ const WIZARD_STEPS = [
     { value: "-78", label: "Midpoint coefficient", detail: "Equation constant: −78; an approximate midpoint, not a validated individual equation" },
   ] },
 ];
-
-const ACCENT_PALETTES = {
-  blue: { label: "Blue", value: "#2563eb", soft: "#eff6ff", border: "#bfdbfe" },
-  violet: { label: "Violet", value: "#7c3aed", soft: "#f5f3ff", border: "#ddd6fe" },
-  emerald: { label: "Emerald", value: "#059669", soft: "#ecfdf5", border: "#a7f3d0" },
-  rose: { label: "Rose", value: "#e11d48", soft: "#fff1f2", border: "#fecdd3" },
-  orange: { label: "Orange", value: "#ea580c", soft: "#fff7ed", border: "#fed7aa" },
-  teal: { label: "Teal", value: "#0d9488", soft: "#f0fdfa", border: "#99f6e4" },
-  slate: { label: "Slate", value: "#475569", soft: "#f1f5f9", border: "#cbd5e1" },
-};
 
 const ACTIVITY_LABELS = {
   sedentary: "Sedentary",
@@ -187,18 +178,17 @@ function entryValues(entry) {
   };
 }
 function applyTheme() {
-  const preferences = data.onboardingComplete && !state.appearanceOnly ? data.preferences : {
-    theme: state.tempTheme,
-    accentColor: state.tempAccent,
-  };
-  const theme = preferences.theme === "dark" ? "dark" : "light";
-  const palette = ACCENT_PALETTES[preferences.accentColor] || ACCENT_PALETTES.blue;
+  const savedTheme = data.onboardingComplete && !state.appearanceOnly
+    ? data.preferences.theme
+    : state.tempTheme;
+  const theme = savedTheme === "dark" ? "dark" : "light";
   const html = document.documentElement;
   html.dataset.theme = theme;
-  html.style.setProperty("--accent", palette.value);
-  html.style.setProperty("--accent-text", "#ffffff");
-  html.style.setProperty("--accent-soft", theme === "dark" ? `${palette.value}26` : palette.soft);
-  html.style.setProperty("--accent-border", theme === "dark" ? `${palette.value}80` : palette.border);
+  // Keep the original monochrome accent: black in light mode, white in dark mode.
+  html.style.setProperty("--accent", theme === "dark" ? "#f4f4f5" : "#111111");
+  html.style.setProperty("--accent-text", theme === "dark" ? "#111111" : "#ffffff");
+  html.style.setProperty("--accent-soft", theme === "dark" ? "#27272a" : "#f1f1f1");
+  html.style.setProperty("--accent-border", theme === "dark" ? "#52525b" : "#d8d8d8");
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0b0b0d" : "#f7f7f7");
 }
 
@@ -408,6 +398,31 @@ function renderReports() {
   return `${pageHeading("Reports", "Download a PDF summary containing only the information you have entered.", `<div class="report-actions"><button class="btn btn-primary" data-action="download-pdf-report">${icon("fileDown", 14)} Download PDF Report</button></div>`)}${renderReportDocument()}`;
 }
 
+function renderWelcome() {
+  if (welcomeTimer) window.clearTimeout(welcomeTimer);
+  root.innerHTML = `<main class="welcome-screen" aria-label="Welcome">
+    <div class="welcome-content">
+      <span class="welcome-eyebrow">A CLEARER PICTURE OF YOUR HEALTH</span>
+      <h1>${state.appearanceOnly ? "Welcome back." : "Welcome."}</h1>
+      <p>${state.appearanceOnly ? "Your saved health information is ready. Choose your appearance to continue." : "Let's set up your personal health workspace, one simple question at a time."}</p>
+      <div class="welcome-loading" aria-label="Starting your setup"><span></span></div>
+      <span class="welcome-caption">Preparing your setup</span>
+    </div>
+  </main>`;
+  welcomeTimer = window.setTimeout(() => {
+    const screen = root.querySelector(".welcome-screen");
+    if (!screen || !state.showWelcome) return;
+    screen.classList.add("is-leaving");
+    welcomeTimer = window.setTimeout(() => {
+      if (!state.showWelcome) return;
+      state.showWelcome = false;
+      renderWizard();
+      const panel = root.querySelector(".wizard-panel");
+      panel?.classList.add("wizard-entering");
+    }, 420);
+  }, 1500);
+}
+
 function renderWizard() {
   const appearanceOnly = state.appearanceOnly;
   const step = appearanceOnly ? WIZARD_STEPS.find((item) => item.key === "appearance") : WIZARD_STEPS[state.wizardIndex];
@@ -422,7 +437,6 @@ function renderWizard() {
     ];
     control = `<div class="appearance-picker">
       <div class="appearance-field"><span class="appearance-label">Color mode</span><div class="appearance-mode-grid">${themeChoices.map((choice) => `<button type="button" class="appearance-mode-card ${state.tempTheme === choice.value ? "selected" : ""}" data-appearance-theme="${choice.value}" aria-pressed="${state.tempTheme === choice.value}">${icon(choice.icon, 18)}<span><strong>${choice.label}</strong><small>${choice.description}</small></span></button>`).join("")}</div></div>
-      <div class="appearance-field"><span class="appearance-label">Accent color</span><div class="accent-palette" role="group" aria-label="Choose an accent color">${Object.entries(ACCENT_PALETTES).map(([key, palette]) => `<button type="button" class="accent-choice ${state.tempAccent === key ? "selected" : ""}" data-appearance-accent="${key}" aria-label="${palette.label}" aria-pressed="${state.tempAccent === key}" title="${palette.label}"><span class="accent-swatch" style="--swatch:${palette.value}"></span><span>${palette.label}</span></button>`).join("")}</div></div>
     </div>`;
   } else if (step.type === "options") {
     control = `<div class="option-list">${step.options.map((option) => `<button type="button" class="option-card ${state.wizardValue === option.value ? "selected" : ""}" data-wizard-option="${option.value}"><span class="option-radio"></span><span><strong>${esc(option.label)}</strong><small>${esc(option.detail)}</small></span></button>`).join("")}</div>`;
@@ -433,7 +447,7 @@ function renderWizard() {
     const max = imperial ? (step.maxImperial ?? step.max) : (step.maxMetric ?? step.max);
     control = `<div class="wizard-input-wrap"><input class="input wizard-input" id="wizard-input" name="wizardValue" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step.step}" data-min="${min}" data-max="${max}" data-step="${step.step}" placeholder="Enter value" value="${esc(state.wizardValue)}" autocomplete="off"/><div class="number-stepper-group" role="group" aria-label="Adjust ${esc(step.title.toLowerCase())}"><button class="number-stepper-btn" type="button" data-stepper="-1" aria-label="Decrease value">−</button><button class="number-stepper-btn" type="button" data-stepper="1" aria-label="Increase value">+</button></div><span class="wizard-suffix">${suffix}</span></div>`;
   }
-  root.innerHTML = `<main class="wizard-shell wizard-shell-simple"><div class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>${appearanceOnly ? "WORKSPACE PREFERENCES" : "YOUR HEALTH PROFILE"}</span><span>${appearanceOnly ? "One-time setup" : `Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}`}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(appearanceOnly ? "Your existing health information will stay saved. Choose the appearance you prefer to continue." : step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions">${appearanceOnly ? "<span></span>" : `<button class="btn btn-ghost" type="button" data-action="wizard-back" ${state.wizardIndex === 0 ? "disabled" : ""}>${icon("back", 14)} Back</button>`}<div class="wizard-actions-right">${appearanceOnly || step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${appearanceOnly ? "Save preferences" : state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div></div></div></main>`;
+  root.innerHTML = `<main class="wizard-shell wizard-shell-simple"><div class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>${appearanceOnly ? "WORKSPACE PREFERENCES" : "YOUR HEALTH PROFILE"}</span><span>${appearanceOnly ? "One-time setup" : `Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}`}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(appearanceOnly ? "Your existing health information will stay saved. Choose the appearance you prefer to continue." : step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions ${!appearanceOnly && state.wizardIndex === 0 ? "wizard-actions-first" : ""}">${!appearanceOnly && state.wizardIndex > 0 ? `<button class="btn btn-ghost" type="button" data-action="wizard-back">${icon("back", 14)} Back</button>` : ""}<div class="wizard-actions-right">${appearanceOnly || step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${appearanceOnly ? "Save preferences" : state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div></div></div></main>`;
   renderIcons();
   const input = root.querySelector("#wizard-input");
   if (input) input.focus({ preventScroll: true });
@@ -467,7 +481,6 @@ function collectWizardAnswer(skip = false) {
   }
   if (step.key === "appearance") {
     data.preferences.theme = state.tempTheme;
-    data.preferences.accentColor = state.tempAccent;
     data.preferences.appearanceConfigured = true;
     return;
   }
@@ -528,6 +541,7 @@ function wizardNext(skip = false) {
   finishWizard();
 }
 function finishWizard() {
+  if (welcomeTimer) window.clearTimeout(welcomeTimer);
   const answers = state.wizardAnswers;
   data.preferences.units = state.tempUnits;
   if (Number.isFinite(answers.age)) data.profile.age = answers.age;
@@ -563,8 +577,7 @@ function downloadPDFReport() {
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 18;
   const width = pageWidth - margin * 2;
-  const palette = ACCENT_PALETTES[data.preferences.accentColor] || ACCENT_PALETTES.blue;
-  const rgb = palette.value.match(/[a-f0-9]{2}/gi).map((part) => parseInt(part, 16));
+  const rgb = [17, 17, 17];
   let y = 22;
 
   const clean = (value) => String(value ?? "")
@@ -689,13 +702,6 @@ function handleClick(event) {
     renderWizard();
     return;
   }
-  const appearanceAccent = event.target.closest("[data-appearance-accent]");
-  if (appearanceAccent) {
-    state.tempAccent = appearanceAccent.dataset.appearanceAccent;
-    applyTheme();
-    renderWizard();
-    return;
-  }
   const option = event.target.closest("[data-wizard-option]");
   if (option) {
     const value = option.dataset.wizardOption;
@@ -718,9 +724,10 @@ function handleClick(event) {
       if (window.confirm("Reset your workspace and clear the information saved in this browser? You will return to the first onboarding question.")) {
         data = createDefaultData();
         saveData(data);
-        state = { wizardIndex: 0, appearanceOnly: false, wizardAnswers: {}, wizardValue: "", wizardError: "", tempUnits: "metric", tempTheme: "light", tempAccent: "blue" };
+        if (welcomeTimer) window.clearTimeout(welcomeTimer);
+        state = { wizardIndex: 0, appearanceOnly: false, showWelcome: true, wizardAnswers: {}, wizardValue: "", wizardError: "", tempUnits: "metric", tempTheme: "light" };
         applyTheme();
-        renderWizard();
+        render();
       }
       break;
     }
@@ -737,7 +744,8 @@ function handleInput(event) {
 
 function render() {
   applyTheme();
-  if (!data.onboardingComplete || state.appearanceOnly) renderWizard();
+  if (state.showWelcome) renderWelcome();
+  else if (!data.onboardingComplete || state.appearanceOnly) renderWizard();
   else renderAppShell();
 }
 

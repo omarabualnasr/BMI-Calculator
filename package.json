@@ -1,7 +1,7 @@
 {
   "name": "health-workspace",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.4.0",
   "type": "module",
   "description": "A private, client-side personal health workspace with Lucide icons, transparent calculations, charts, and reports.",
   "scripts": {

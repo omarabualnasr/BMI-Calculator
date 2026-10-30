@@ -5,7 +5,7 @@ export function createDefaultData() {
     version: 1,
     onboardingComplete: false,
     profile: {},
-    preferences: { units: "metric", theme: "light", accentColor: "blue", appearanceConfigured: false },
+    preferences: { units: "metric", theme: "light", appearanceConfigured: false },
     entries: [],
   };
 }
@@ -32,7 +32,6 @@ export function normalizeData(raw) {
   safe.profile.activityLevel = ["sedentary", "light", "moderate", "veryActive", "extraActive"].includes(raw.profile.activityLevel) ? raw.profile.activityLevel : undefined;
   safe.preferences.units = raw.preferences?.units === "imperial" ? "imperial" : "metric";
   safe.preferences.theme = raw.preferences?.theme === "dark" ? "dark" : "light";
-  safe.preferences.accentColor = ["blue", "violet", "emerald", "rose", "orange", "teal", "slate"].includes(raw.preferences?.accentColor) ? raw.preferences.accentColor : "blue";
   safe.preferences.appearanceConfigured = raw.preferences?.appearanceConfigured === true;
   safe.entries = raw.entries.map((entry) => {
     if (!isObject(entry) || typeof entry.id !== "string" || typeof entry.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) || new Date(`${entry.date}T12:00:00Z`).toISOString().slice(0, 10) !== entry.date) return null;

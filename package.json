@@ -1,0 +1,13 @@
+{
+  "name": "the-health-calculator",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A private, client-side personal health calculator with guided onboarding, transparent metrics, charts, and reports.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "python -m http.server 4173"
+  },
+  "keywords": ["health", "calculator", "metrics", "charts", "github-pages"],
+  "license": "MIT"
+}

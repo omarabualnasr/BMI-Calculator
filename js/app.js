@@ -15,14 +15,15 @@ import { createDefaultData, createId, loadData, saveData, sortEntries } from "./
 const root = document.querySelector("#app");
 let data = loadData();
 let state = {
-  wizardIndex: 0,
+  wizardIndex: data.onboardingComplete && data.preferences.appearanceConfigured !== true ? 1 : 0,
+  appearanceOnly: data.onboardingComplete && data.preferences.appearanceConfigured !== true,
   wizardAnswers: {},
   wizardValue: "",
   wizardError: "",
   tempUnits: data.preferences.units,
-  toast: null,
+  tempTheme: data.preferences.theme || "light",
+  tempAccent: data.preferences.accentColor || "blue",
 };
-let toastTimer;
 
 const WORKSPACE_SECTIONS = [
   ["overview", "Overview"],
@@ -33,6 +34,7 @@ const WORKSPACE_SECTIONS = [
 
 const WIZARD_STEPS = [
   { key: "units", title: "Which units do you prefer?", copy: "Choose how measurements are displayed throughout your workspace.", type: "options", options: [{ value: "metric", label: "Metric", detail: "Centimetres and kilograms" }, { value: "imperial", label: "Imperial", detail: "Feet, inches and pounds" }], optional: false },
+  { key: "appearance", title: "Make your workspace yours", copy: "Choose a light or dark interface and an accent color. You can change these choices the next time you reset onboarding.", type: "appearance", optional: false },
   { key: "age", title: "How old are you?", copy: "Age is used only by calculations that require it. Adult BMI categories are limited to adults aged 20 and above.", type: "number", suffix: "years", min: 1, max: 120, step: 1 },
   { key: "height", title: "What is your height?", copy: "Enter your height. It is used by BMI, body measurement ratios, BMR and body surface area calculations.", type: "number", suffixMetric: "cm", suffixImperial: "in", minMetric: 50, maxMetric: 260, minImperial: 19.7, maxImperial: 102.4, step: 0.1 },
   { key: "weight", title: "What is your current weight?", copy: "This creates your first dated measurement when you finish setup.", type: "number", suffixMetric: "kg", suffixImperial: "lb", minMetric: 1, maxMetric: 500, minImperial: 2.2, maxImperial: 1102, step: 0.1 },
@@ -55,6 +57,16 @@ const WIZARD_STEPS = [
     { value: "-78", label: "Midpoint coefficient", detail: "Equation constant: −78; an approximate midpoint, not a validated individual equation" },
   ] },
 ];
+
+const ACCENT_PALETTES = {
+  blue: { label: "Blue", value: "#2563eb", soft: "#eff6ff", border: "#bfdbfe" },
+  violet: { label: "Violet", value: "#7c3aed", soft: "#f5f3ff", border: "#ddd6fe" },
+  emerald: { label: "Emerald", value: "#059669", soft: "#ecfdf5", border: "#a7f3d0" },
+  rose: { label: "Rose", value: "#e11d48", soft: "#fff1f2", border: "#fecdd3" },
+  orange: { label: "Orange", value: "#ea580c", soft: "#fff7ed", border: "#fed7aa" },
+  teal: { label: "Teal", value: "#0d9488", soft: "#f0fdfa", border: "#99f6e4" },
+  slate: { label: "Slate", value: "#475569", soft: "#f1f5f9", border: "#cbd5e1" },
+};
 
 const ACTIVITY_LABELS = {
   sedentary: "Sedentary",
@@ -174,26 +186,27 @@ function entryValues(entry) {
     exercise: Number.isFinite(entry.exerciseMinutes) ? `${formatNumber(entry.exerciseMinutes, 0)} min` : "—",
   };
 }
-function notify(message, type = "success") {
-  state.toast = { message, type };
-  render();
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => {
-    state.toast = null;
-    const toast = root.querySelector(".toast");
-    if (toast) toast.remove();
-  }, 3000);
-}
 function applyTheme() {
-  document.documentElement.dataset.theme = "light";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#ffffff");
+  const preferences = data.onboardingComplete && !state.appearanceOnly ? data.preferences : {
+    theme: state.tempTheme,
+    accentColor: state.tempAccent,
+  };
+  const theme = preferences.theme === "dark" ? "dark" : "light";
+  const palette = ACCENT_PALETTES[preferences.accentColor] || ACCENT_PALETTES.blue;
+  const html = document.documentElement;
+  html.dataset.theme = theme;
+  html.style.setProperty("--accent", palette.value);
+  html.style.setProperty("--accent-text", "#ffffff");
+  html.style.setProperty("--accent-soft", theme === "dark" ? `${palette.value}26` : palette.soft);
+  html.style.setProperty("--accent-border", theme === "dark" ? `${palette.value}80` : palette.border);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0b0b0d" : "#f7f7f7");
 }
 
 function renderWorkspaceNav() {
   return `<nav class="workspace-nav" aria-label="Workspace sections">${WORKSPACE_SECTIONS.map(([id, label]) => `<a class="workspace-nav-link" href="#${id}" data-scroll-to="${id}">${label}</a>`).join("")}</nav>`;
 }
 function renderAppShell() {
-  root.innerHTML = `<main class="workspace-shell"><header class="workspace-topbar"><div class="workspace-heading"><h1>Workspace</h1><p>Your measurements, calculations, insights, and report in one place.</p></div><button class="btn" type="button" data-action="reset-onboarding">${icon("refresh", 15)} Reset</button></header>${renderWorkspaceNav()}<div class="page-content workspace-content">${renderWorkspace()}</div></main>${state.toast ? `<div class="toast ${state.toast.type === "error" ? "error" : ""}" role="status">${esc(state.toast.message)}</div>` : ""}`;
+  root.innerHTML = `<main class="workspace-shell"><header class="workspace-topbar"><div class="workspace-heading"><h1>Workspace</h1><p>Your measurements, calculations, insights, and report in one place.</p></div><button class="btn" type="button" data-action="reset-onboarding">${icon("refresh", 15)} Reset</button></header>${renderWorkspaceNav()}<div class="page-content workspace-content">${renderWorkspace()}</div></main>`;
   renderIcons();
   drawCharts();
 }
@@ -392,15 +405,25 @@ function renderReportDocument() {
   </article>`;
 }
 function renderReports() {
-  return `${pageHeading("Reports", "Review, print, or save a summary containing only the data you have entered.", `<div class="report-actions"><button class="btn" data-action="download-report">${icon("download", 14)} Download text</button><button class="btn btn-primary" data-action="print-report">${icon("fileDown", 14)} Print / save PDF</button></div>`)}${renderReportDocument()}`;
+  return `${pageHeading("Reports", "Download a PDF summary containing only the information you have entered.", `<div class="report-actions"><button class="btn btn-primary" data-action="download-pdf-report">${icon("fileDown", 14)} Download PDF Report</button></div>`)}${renderReportDocument()}`;
 }
 
 function renderWizard() {
-  const step = WIZARD_STEPS[state.wizardIndex];
-  const progress = ((state.wizardIndex + 1) / WIZARD_STEPS.length) * 100;
+  const appearanceOnly = state.appearanceOnly;
+  const step = appearanceOnly ? WIZARD_STEPS.find((item) => item.key === "appearance") : WIZARD_STEPS[state.wizardIndex];
+  const progress = appearanceOnly ? 100 : ((state.wizardIndex + 1) / WIZARD_STEPS.length) * 100;
   let control = "";
   if (step.key === "units") {
     control = `<div class="option-list">${step.options.map((option) => `<button type="button" class="option-card ${state.tempUnits === option.value ? "selected" : ""}" data-wizard-option="${option.value}"><span class="option-radio"></span><span><strong>${option.label}</strong><small>${option.detail}</small></span></button>`).join("")}</div>`;
+  } else if (step.key === "appearance") {
+    const themeChoices = [
+      { value: "light", label: "Light", icon: "sun", description: "Bright and minimal" },
+      { value: "dark", label: "Dark", icon: "moon", description: "Low-light workspace" },
+    ];
+    control = `<div class="appearance-picker">
+      <div class="appearance-field"><span class="appearance-label">Color mode</span><div class="appearance-mode-grid">${themeChoices.map((choice) => `<button type="button" class="appearance-mode-card ${state.tempTheme === choice.value ? "selected" : ""}" data-appearance-theme="${choice.value}" aria-pressed="${state.tempTheme === choice.value}">${icon(choice.icon, 18)}<span><strong>${choice.label}</strong><small>${choice.description}</small></span></button>`).join("")}</div></div>
+      <div class="appearance-field"><span class="appearance-label">Accent color</span><div class="accent-palette" role="group" aria-label="Choose an accent color">${Object.entries(ACCENT_PALETTES).map(([key, palette]) => `<button type="button" class="accent-choice ${state.tempAccent === key ? "selected" : ""}" data-appearance-accent="${key}" aria-label="${palette.label}" aria-pressed="${state.tempAccent === key}" title="${palette.label}"><span class="accent-swatch" style="--swatch:${palette.value}"></span><span>${palette.label}</span></button>`).join("")}</div></div>
+    </div>`;
   } else if (step.type === "options") {
     control = `<div class="option-list">${step.options.map((option) => `<button type="button" class="option-card ${state.wizardValue === option.value ? "selected" : ""}" data-wizard-option="${option.value}"><span class="option-radio"></span><span><strong>${esc(option.label)}</strong><small>${esc(option.detail)}</small></span></button>`).join("")}</div>`;
   } else {
@@ -410,7 +433,7 @@ function renderWizard() {
     const max = imperial ? (step.maxImperial ?? step.max) : (step.maxMetric ?? step.max);
     control = `<div class="wizard-input-wrap"><input class="input wizard-input" id="wizard-input" name="wizardValue" type="number" inputmode="decimal" min="${min}" max="${max}" step="${step.step}" data-min="${min}" data-max="${max}" data-step="${step.step}" placeholder="Enter value" value="${esc(state.wizardValue)}" autocomplete="off"/><div class="number-stepper-group" role="group" aria-label="Adjust ${esc(step.title.toLowerCase())}"><button class="number-stepper-btn" type="button" data-stepper="-1" aria-label="Decrease value">−</button><button class="number-stepper-btn" type="button" data-stepper="1" aria-label="Increase value">+</button></div><span class="wizard-suffix">${suffix}</span></div>`;
   }
-  root.innerHTML = `<main class="wizard-shell wizard-shell-simple"><div class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>YOUR HEALTH PROFILE</span><span>Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions"><button class="btn btn-ghost" type="button" data-action="wizard-back" ${state.wizardIndex === 0 ? "disabled" : ""}>${icon("back", 14)} Back</button><div class="wizard-actions-right">${step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div><p class="card-description" style="margin-top:28px">Skip optional questions and continue with the information you have.</p></div></div></main>`;
+  root.innerHTML = `<main class="wizard-shell wizard-shell-simple"><div class="wizard-main"><div class="wizard-panel"><div class="wizard-top"><span>${appearanceOnly ? "WORKSPACE PREFERENCES" : "YOUR HEALTH PROFILE"}</span><span>${appearanceOnly ? "One-time setup" : `Step ${state.wizardIndex + 1} of ${WIZARD_STEPS.length}`}</span></div><div class="progress-track"><div class="progress-fill" style="width:${progress}%"></div></div><h2>${esc(step.title)}</h2><p class="wizard-copy">${esc(appearanceOnly ? "Your existing health information will stay saved. Choose the appearance you prefer to continue." : step.copy)}</p>${control}${state.wizardError ? `<div class="wizard-error" role="alert">${esc(state.wizardError)}</div>` : ""}<div class="wizard-actions">${appearanceOnly ? "<span></span>" : `<button class="btn btn-ghost" type="button" data-action="wizard-back" ${state.wizardIndex === 0 ? "disabled" : ""}>${icon("back", 14)} Back</button>`}<div class="wizard-actions-right">${appearanceOnly || step.optional === false ? "" : `<button class="btn" type="button" data-action="wizard-skip">Skip</button>`}<button class="btn btn-primary" type="button" data-action="wizard-next">${appearanceOnly ? "Save preferences" : state.wizardIndex === WIZARD_STEPS.length - 1 ? "Finish setup" : "Continue"} ${icon("arrow", 14)}</button></div></div></div></div></main>`;
   renderIcons();
   const input = root.querySelector("#wizard-input");
   if (input) input.focus({ preventScroll: true });
@@ -418,7 +441,9 @@ function renderWizard() {
 
 function wizardCurrentValue() {
   const step = WIZARD_STEPS[state.wizardIndex];
-  return step.key === "units" ? state.tempUnits : state.wizardValue;
+  if (step.key === "units") return state.tempUnits;
+  if (step.key === "appearance") return "appearance-selected";
+  return state.wizardValue;
 }
 function validateWizardStep() {
   const step = WIZARD_STEPS[state.wizardIndex];
@@ -438,6 +463,12 @@ function collectWizardAnswer(skip = false) {
   const step = WIZARD_STEPS[state.wizardIndex];
   if (step.key === "units") {
     data.preferences.units = state.tempUnits;
+    return;
+  }
+  if (step.key === "appearance") {
+    data.preferences.theme = state.tempTheme;
+    data.preferences.accentColor = state.tempAccent;
+    data.preferences.appearanceConfigured = true;
     return;
   }
   if (skip || !state.wizardValue) {
@@ -480,6 +511,15 @@ function wizardNext(skip = false) {
   collectWizardAnswer(skip);
   state.wizardError = "";
   state.wizardValue = "";
+  if (state.appearanceOnly) {
+    saveData(data);
+    state.appearanceOnly = false;
+    state.wizardAnswers = {};
+    state.wizardIndex = 0;
+    applyTheme();
+    render();
+    return;
+  }
   if (state.wizardIndex < WIZARD_STEPS.length - 1) {
     state.wizardIndex += 1;
     renderWizard();
@@ -503,41 +543,121 @@ function finishWizard() {
   applyTheme();
   state.wizardAnswers = {};
   state.wizardIndex = 0;
-  notify("Your health workspace is ready.");
+  state.appearanceOnly = false;
+  state.wizardValue = "";
+  state.wizardError = "";
+  render();
 }
 
-function downloadFile(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-function downloadReport() {
+function downloadPDFReport() {
+  const JsPDF = window.jspdf?.jsPDF;
+  if (!JsPDF) {
+    // Graceful fallback if the PDF library CDN is unavailable.
+    window.print();
+    return;
+  }
+
   const report = reportRows();
-  const lines = [
-    "HEALTH WORKSPACE — PERSONAL HEALTH SUMMARY",
-    `Generated: ${formatDate(todayISO())}`,
-    `Measurement records: ${data.entries.length}`,
-    "",
-    "RECORDED PROFILE AND MEASUREMENTS",
-    ...(report.inputs.length ? report.inputs.map(([name, value]) => `${name}: ${value}`) : ["No profile or measurement values recorded."]),
-    "",
-    "AVAILABLE CALCULATIONS",
-    ...(report.calculated.length ? report.calculated.map(([name, value, note]) => `${name}: ${value}${note ? ` — ${note}` : ""}`) : ["No calculations are currently available."]),
-    "",
-    "DATA-BACKED OBSERVATIONS",
-    ...(report.insights.length ? report.insights.map((item) => `${item.title}: ${item.text}`) : ["No observations can be generated from the current data."]),
-    "",
-    "LIMITATIONS",
-    "This summary is not a medical record or diagnosis. Calculations are estimates and screening measures. Missing measurements are intentionally left blank. Discuss medical decisions with a qualified health professional.",
-  ];
-  downloadFile(`health-workspace-report-${todayISO()}.txt`, lines.join("\n"), "text/plain;charset=utf-8");
-  notify("Text report exported");
+  const pdf = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 18;
+  const width = pageWidth - margin * 2;
+  const palette = ACCENT_PALETTES[data.preferences.accentColor] || ACCENT_PALETTES.blue;
+  const rgb = palette.value.match(/[a-f0-9]{2}/gi).map((part) => parseInt(part, 16));
+  let y = 22;
+
+  const clean = (value) => String(value ?? "")
+    .replace(/[–—]/g, "-")
+    .replace(/×/g, "x")
+    .replace(/²/g, "^2")
+    .replace(/÷/g, "/")
+    .replace(/[·•]/g, "-");
+  const ensureSpace = (height) => {
+    if (y + height > pageHeight - 18) {
+      pdf.addPage();
+      y = 20;
+    }
+  };
+  const paragraph = (text, size = 9, color = [65, 65, 70], lineHeight = 4.5) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(size);
+    pdf.setTextColor(...color);
+    const lines = pdf.splitTextToSize(clean(text), width);
+    ensureSpace(lines.length * lineHeight + 2);
+    pdf.text(lines, margin, y);
+    y += lines.length * lineHeight + 2;
+  };
+  const section = (title) => {
+    ensureSpace(13);
+    y += 5;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(35, 35, 40);
+    pdf.text(clean(title), margin, y);
+    y += 2;
+    pdf.setDrawColor(225, 225, 230);
+    pdf.line(margin, y, pageWidth - margin, y);
+    y += 6;
+  };
+  const rows = (items) => {
+    if (!items.length) {
+      paragraph("No supported information has been recorded.", 9, [125, 125, 130]);
+      return;
+    }
+    for (const [name, value, note] of items) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(55, 55, 60);
+      const labelLines = pdf.splitTextToSize(clean(`${name}: ${value}`), width);
+      ensureSpace(labelLines.length * 4.5 + (note ? 9 : 4));
+      pdf.text(labelLines, margin, y);
+      y += labelLines.length * 4.5;
+      if (note) paragraph(note, 8, [115, 115, 122], 4);
+      y += 1.5;
+    }
+  };
+
+  pdf.setFillColor(...rgb);
+  pdf.roundedRect(margin, 12, 9, 9, 2, 2, "F");
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(19);
+  pdf.setTextColor(25, 25, 30);
+  pdf.text("Personal health summary", margin + 14, 19);
+  y = 29;
+  paragraph(`Generated ${formatDate(todayISO())}  |  ${data.entries.length} dated measurement record${data.entries.length === 1 ? "" : "s"}`, 8, [120, 120, 125]);
+
+  section("Recorded profile and measurements");
+  rows(report.inputs);
+  section("Available calculations");
+  rows(report.calculated);
+  section("Data-backed observations");
+  if (report.insights.length) {
+    for (const item of report.insights) {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(55, 55, 60);
+      ensureSpace(10);
+      pdf.text(clean(item.title), margin, y);
+      y += 4.5;
+      paragraph(item.text, 8.5, [90, 90, 96]);
+    }
+  } else {
+    paragraph("No observations can be generated from the information currently recorded.", 9, [125, 125, 130]);
+  }
+  section("Important limitations");
+  paragraph("This report is an informational calculation summary, not a medical record or diagnosis. Estimates depend on the accuracy of the information entered and may not reflect measured physiology. BMI and waist ratios are screening measures. Energy expenditure is predicted, not measured. Discuss health concerns and medical decisions with a qualified health professional. Missing measurements are intentionally left blank.", 8.5, [90, 90, 96], 4.2);
+
+  const pages = pdf.internal.getNumberOfPages();
+  for (let page = 1; page <= pages; page += 1) {
+    pdf.setPage(page);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(145, 145, 150);
+    pdf.text("Informational summary - not a diagnosis", margin, pageHeight - 9);
+    pdf.text(`${page} / ${pages}`, pageWidth - margin, pageHeight - 9, { align: "right" });
+  }
+  pdf.save(`health-workspace-report-${todayISO()}.pdf`);
 }
 
 function handleClick(event) {
@@ -562,6 +682,20 @@ function handleClick(event) {
     root.querySelector(`#${scrollTarget.dataset.scrollTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
+  const appearanceTheme = event.target.closest("[data-appearance-theme]");
+  if (appearanceTheme) {
+    state.tempTheme = appearanceTheme.dataset.appearanceTheme;
+    applyTheme();
+    renderWizard();
+    return;
+  }
+  const appearanceAccent = event.target.closest("[data-appearance-accent]");
+  if (appearanceAccent) {
+    state.tempAccent = appearanceAccent.dataset.appearanceAccent;
+    applyTheme();
+    renderWizard();
+    return;
+  }
   const option = event.target.closest("[data-wizard-option]");
   if (option) {
     const value = option.dataset.wizardOption;
@@ -579,13 +713,12 @@ function handleClick(event) {
     case "wizard-back": wizardBack(); break;
     case "wizard-next": wizardNext(false); break;
     case "wizard-skip": wizardNext(true); break;
-    case "download-report": downloadReport(); break;
-    case "print-report": window.print(); break;
+    case "download-pdf-report": downloadPDFReport(); break;
     case "reset-onboarding": {
       if (window.confirm("Reset your workspace and clear the information saved in this browser? You will return to the first onboarding question.")) {
         data = createDefaultData();
         saveData(data);
-        state = { wizardIndex: 0, wizardAnswers: {}, wizardValue: "", wizardError: "", tempUnits: "metric", toast: null };
+        state = { wizardIndex: 0, appearanceOnly: false, wizardAnswers: {}, wizardValue: "", wizardError: "", tempUnits: "metric", tempTheme: "light", tempAccent: "blue" };
         applyTheme();
         renderWizard();
       }
@@ -604,7 +737,7 @@ function handleInput(event) {
 
 function render() {
   applyTheme();
-  if (!data.onboardingComplete) renderWizard();
+  if (!data.onboardingComplete || state.appearanceOnly) renderWizard();
   else renderAppShell();
 }
 
